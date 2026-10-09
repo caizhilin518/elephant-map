@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>南返路线模拟器 · 护象指挥部</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <style>
+        :root { --bg: #1a1a2e; --accent: #ff6d00; --green-bg: #2d5a27; }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            height: 100vh; height: 100dvh;
+            overflow: hidden;
+            touch-action: manipulation;
+            user-select: none;
+        }
+        .container { display:flex; width:100vw; height:100vh; height:100dvh; }
+        .map-panel { flex:3; position:relative; min-width:0; }
+        #map { width:100%; height:100%; }
+        .map-hint {
+            position:absolute; top:8px; left:50%; transform:translateX(-50%);
+            background:rgba(0,0,0,0.75); color:#fff; padding:5px 14px; border-radius:14px;
+            font-size:0.7em; pointer-events:none; z-index:500; white-space:nowrap;
+        }
+        .side-panel {
+            flex:2; background:#2d5a27; display:flex; flex-direction:column;
+            padding:12px 10px; overflow-y:auto; border-left:2px solid #1b3a0a;
+            max-width:360px; min-width:220px; gap:8px;
+        }
+        .side-panel h3 {
+            color:#fff; text-align:center; margin:0; font-size:0.95em;
+            padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.2);
+        }
+        .white-card {
+            background:#fff; border-radius:14px; padding:12px;
+            box-shadow:0 4px 16px rgba(0,0,0,0.3); flex:1; overflow-y:auto;
+        }
+        .white-card .card-title {
+            font-size:0.8em; font-weight:bold; color:#2d5a27; margin-bottom:8px;
+            padding-bottom:6px; border-bottom:2px dashed #e0e0e0;
+        }
+        .route-info-content { font-size:0.72em; color:#333; line-height:1.6; }
+        .segment { margin-bottom:6px; padding-bottom:6px; border-bottom:1px dashed #d4c5a9; }
+        .segment .seg-num { color:#ff6d00; font-weight:bold; }
+        .segment .dir { color:#2d5a27; font-weight:bold; }
+        .empty-hint { color:#999; text-align:center; padding:20px 0; font-size:0.8em; }
+        .ai-card {
+            background:#fff; border-radius:14px; padding:10px 12px;
+            box-shadow:0 4px 16px rgba(0,0,0,0.3); display:none;
+            font-size:0.7em; color:#333; line-height:1.5;
+        }
+        .ai-card.show { display:block; }
+        .ai-card .ai-title { font-weight:bold; color:#2d5a27; margin-bottom:4px; }
+        .btn-area { display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
+        button {
+            padding:10px 16px; border:none; border-radius:22px; font-weight:bold;
+            font-size:0.8rem; cursor:pointer; color:#fff; white-space:nowrap;
+            transition:all 0.25s; box-shadow:0 2px 8px rgba(0,0,0,0.3);
+        }
+        button:active { transform:scale(0.94); }
+        .btn-draw { background:#9E9E9E; color:#fff; }
+        .btn-draw.active { background:#ff6d00; }
+        .btn-reset { background:#6b6b6b; }
+        .btn-ai { background:#4a7c4f; }
+        button:disabled { opacity:0.4; }
+        .info-card {
+            position:absolute; bottom:15px; left:10px; right:10px; background:#fff;
+            border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.55); z-index:800;
+            display:none; overflow:hidden; max-height:50vh;
+            animation:slideUp 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+        }
+        @keyframes slideUp { from { transform:translateY(40px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+        .info-card.show { display:block; }
+        .card-header { padding:14px 16px; color:#fff; position:relative; }
+        .card-header .close-btn {
+            position:absolute; top:8px; right:12px; font-size:1.2em; cursor:pointer;
+            width:28px; height:28px; border-radius:50%; background:rgba(255,255,255,0.25);
+            display:flex; align-items:center; justify-content:center; z-index:10;
+        }
+        .card-header .node-name { font-size:1.1em; font-weight:900; margin-bottom:2px; }
+        .card-header .node-coords { font-size:0.7em; opacity:0.9; }
+        .card-body { padding:12px 16px; color:#333; font-size:0.8em; line-height:1.6; }
+        .card-body .ai-tip { background:#e8f5e9; padding:8px; border-radius:8px; margin-top:8px; font-size:0.9em; }
+        .toast {
+            position:fixed; top:60px; left:50%; transform:translateX(-50%);
+            background:rgba(0,0,0,0.85); color:#fff; padding:8px 16px; border-radius:20px;
+            font-size:0.8em; z-index:2000; pointer-events:none; opacity:0; transition:opacity 0.3s;
+        }
+        .toast.show { opacity:1; }
+        .route-num {
+            background:#ff6d00; color:#fff; border-radius:50%;
+            width:20px; height:20px; font-size:11px; font-weight:bold;
+            display:flex; align-items:center; justify-content:center;
+            border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,0.5);
+        }
+        @media (max-width:600px) {
+            .container { flex-direction:column; }
+            .map-panel { height:50vh; }
+            .side-panel { max-width:100%; border-left:none; border-top:2px solid #1b3a0a; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="map-panel">
+            <div id="map"></div>
+            <div class="map-hint" id="mapHint">👆 点击任意节点查看详细信息</div>
+            <div class="info-card" id="infoCard">
+                <div class="card-header" id="cardHeader">
+                    <span class="close-btn" onclick="closeCard()">✕</span>
+                    <div class="node-name" id="cardName"></div>
+                    <div class="node-coords" id="cardCoords"></div>
+                </div>
+                <div class="card-body" id="cardBody">
+                    <div id="cardInfo"></div>
+                    <div class="ai-tip" id="cardAI"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <h3>🌿 路线规划面板</h3>
+            <div class="white-card" id="whiteCard">
+                <div class="card-title">📏 路线详情</div>
+                <div class="route-info-content" id="routeInfo">
+                    <div class="empty-hint">🟢 起点已就位：<b>晋宁区</b><br><br>👆 请先点击地图上的节点<br>了解各地情况<br><br>讨论后点击下方按钮<br>开始规划路线</div>
+                </div>
+            </div>
+            <div class="ai-card" id="aiReport"></div>
+            <div class="btn-area">
+                <button class="btn-draw" id="btnDraw" onclick="toggleDrawMode()">🖊️ 开始绘制路线</button>
+                <button class="btn-reset" onclick="resetRoute()">🔄 重置</button>
+                <button class="btn-ai" id="btnAI" onclick="aiEvaluate()" disabled>🤖 AI评价</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.body.innerHTML = '<div style="color:#fff;text-align:center;padding-top:40vh;">地图加载失败，请检查网络后刷新</div>';
+        } else {
+            initApp();
+        }
+
+        function initApp() {
+            const map = L.map('map', {
+                center: [23.5, 101.8],
+                zoom: 8,
+                zoomControl: true,
+                attributionControl: false,
+            });
+
+            L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                subdomains: ['1', '2', '3', '4'],
+                maxZoom: 18,
+                minZoom: 5,
+            }).addTo(map);
+
+            setTimeout(() => { map.invalidateSize(); }, 300);
+const nodes = [
+    // 起点（固定）
+    { id:0, name:"晋宁区（起点）", shortName:"晋宁区", lat:24.67, lng:102.60, type:"start",
+      info:"<b>起点：昆明市晋宁区</b><br>🗺️ 城市边缘，人类活动密集<br>⚠️ 象群需尽快离开",
+      ai:"此点为北迁最远点，必须从此出发南返。", color:"#D32F2F" },
+
+    // 补给点：化念水库
+    { id:1, name:"化念水库", shortName:"化念水库", lat:24.08, lng:102.10, type:"supply",
+      info:"<b>化念水库</b><br>💧 水源充足<br>🌿 岸边有竹林<br>🏘️ 距村庄约3km<br>✅ 建议作为休整点",
+      ai:"水源丰富，地势平坦，适合第一站。", color:"#9E9E9E" },
+
+    // 干扰点：峨山县城
+    { id:2, name:"峨山县城", shortName:"峨山县城", lat:24.18, lng:102.41, type:"interfere",
+      info:"<b>峨山县城</b><br>🏘️ 人口密集约3万<br>⚠️ 有学校、主干道<br>❌ 易引发人象冲突",
+      ai:"⚠️ 强烈建议绕行！城镇区域风险高。", color:"#9E9E9E" },
+
+    // 必经点：元江县
+    { id:3, name:"元江县（必经过江点）", shortName:"元江县", lat:23.60, lng:101.99, type:"must",
+      info:"<b>元江县 · 必经过江点</b><br>🌉 唯一通道：元江大桥<br>⚠️ 雨季水位上涨无法涉水<br>🐘 大象天性怕桥，需引诱上桥",
+      ai:"必须经过，无替代路线。请提前设计引导策略。", color:"#9E9E9E" },
+
+    // 干扰点：红河河谷
+    { id:4, name:"红河河谷", shortName:"红河河谷", lat:23.25, lng:102.05, type:"interfere",
+      info:"<b>红河河谷</b><br>⛰️ 深切峡谷，坡度25-35°<br>⚠️ 坡度远超象群承受力(<20°)<br>❌ 象群易滑倒",
+      ai:"⚠️ 地形危险！虽看似有水源，但坡度太大，严禁通行。", color:"#9E9E9E" },
+
+    // 补给点：墨江县（理想路线必经）
+    { id:5, name:"墨江县", shortName:"墨江县", lat:23.43, lng:101.69, type:"supply",
+      info:"<b>墨江县</b><br>🌳 森林覆盖率高<br>🍌 野芭蕉、竹子丰富<br>🏘️ 远离城镇<br>✅ 理想补给点",
+      ai:"食物丰富，适合补充体力，推荐经过。", color:"#9E9E9E" },
+
+    // 干扰点：团田镇（墨江西侧，明显偏离）
+    { id:6, name:"团田镇", shortName:"团田镇", lat:23.38, lng:101.45, type:"interfere",
+      info:"<b>团田镇</b><br>🏘️ 集镇区域，有农贸市场<br>⚠️ 靠近村庄，道路狭窄<br>❌ 偏离主路线，绕行较远",
+      ai:"⚠️ 此点位于主路线西侧，若经过需绕行山路，增加距离且靠近村庄。建议选择墨江县。", color:"#9E9E9E" },
+
+    // 干扰点：者东镇（元江西侧，明显偏离）
+    { id:7, name:"者东镇", shortName:"者东镇", lat:23.95, lng:101.25, type:"interfere",
+      info:"<b>者东镇</b><br>🏘️ 集镇区域，靠近哀牢山<br>⚠️ 有农田和零散村庄<br>❌ 偏离主路线，绕行较远",
+      ai:"⚠️ 此点位于主路线西侧，若经过需绕行山路，增加距离且靠近村庄。建议选择正南方向的墨江县。", color:"#9E9E9E" },
+
+    // 干扰点：通关镇（墨江南侧偏东，偏离主路线）
+    { id:8, name:"通关镇", shortName:"通关镇", lat:23.20, lng:101.80, type:"interfere",
+      info:"<b>通关镇</b><br>🏘️ 集镇区域，有国道穿过<br>🚗 车流量较大<br>❌ 人车密集，象群易受惊",
+      ai:"⚠️ 此点位于主路线东侧，靠近国道，车辆噪音大。建议选择宁洱县。", color:"#9E9E9E" },
+
+    // 补给点：宁洱县（保留，真实路线经过）
+    { id:9, name:"宁洱县", shortName:"宁洱县", lat:23.10, lng:101.35, type:"supply",
+      info:"<b>宁洱县</b><br>🌳 森林覆盖好<br>🍃 有野生象草<br>🏘️ 周边村庄较少<br>✅ 象群曾在此区域活动",
+      ai:"真实象群曾经过此区域，地势平坦、植被丰富，推荐作为中途补给站。", color:"#9E9E9E" },
+
+    // 补给点：普洱太阳河（理想路线必经）
+    { id:10, name:"普洱太阳河", shortName:"普洱太阳河", lat:22.78, lng:101.11, type:"supply",
+      info:"<b>普洱太阳河</b><br>💧 水源丰沛<br>🌳 竹林密布<br>🏘️ 保护区缓冲区，人少<br>✅ 进入终点前最佳休整点",
+      ai:"水源食物俱佳，推荐作为最后补给站。", color:"#9E9E9E" },
+
+    // 干扰点：康平镇（普洱太阳河东侧，偏离主路线）
+    { id:11, name:"康平镇", shortName:"康平镇", lat:22.85, lng:101.35, type:"interfere",
+      info:"<b>康平镇</b><br>🏘️ 农业集镇<br>🌾 周边有大片农田<br>⚠️ 象群可能毁坏庄稼<br>❌ 易引发人象冲突",
+      ai:"⚠️ 此点位于主路线东侧，农田密集，象群可能停留觅食。建议选择普洱太阳河。", color:"#9E9E9E" },
+
+    // 干扰点：整董镇（普洱太阳河南侧偏东，偏离主路线）
+    { id:12, name:"整董镇", shortName:"整董镇", lat:22.55, lng:101.45, type:"interfere",
+      info:"<b>整董镇</b><br>🏘️ 边境小镇<br>⚠️ 靠近居民区<br>🚗 有边境公路穿过<br>❌ 不适合象群通行",
+      ai:"⚠️ 此点位于主路线东侧，靠近边境公路，人类活动频繁。建议选择纳板河向西进入保护区。", color:"#9E9E9E" },
+
+    // 补给点：纳板河（普洱与勐养之间，保护区缓冲区）
+    { id:13, name:"纳板河", shortName:"纳板河", lat:22.45, lng:100.90, type:"supply",
+      info:"<b>纳板河</b><br>💧 河流贯穿，水源丰富<br>🌳 森林茂密<br>🏘️ 属于保护区缓冲区<br>✅ 进入终点前的最后休整点",
+      ai:"水源充足，属于保护区域，是进入勐养子保护区前的理想休整点。", color:"#9E9E9E" },
+
+    // 终点（固定）
+    { id:14, name:"勐养子保护区（终点）", shortName:"勐养子保护区", lat:22.16, lng:100.67, type:"end",
+      info:"<b>终点：勐养子保护区</b><br>🏠 亚洲象栖息地<br>🌳 安全家园",
+      ai:"终点，必须到达。", color:"#D32F2F" }
+];
+
+            // 修正后的图标生成（无transform，依靠iconAnchor定位）
+            function createIconHTML(shortName, color, isSelected) {
+                let borderColor = isSelected ? '#FFD54F' : 'white';
+                let borderWidth = isSelected ? '3px' : '2px';
+                return `<div style="display:flex; flex-direction:column; align-items:center;">
+                    <div style="background:${color}; width:22px; height:22px; border-radius:50%; border:${borderWidth} solid ${borderColor}; box-shadow:0 2px 8px rgba(0,0,0,0.5);"></div>
+                    <div style="background:rgba(0,0,0,0.75); color:white; font-size:10px; padding:2px 6px; border-radius:8px; margin-top:3px; white-space:nowrap;">${shortName}</div>
+                </div>`;
+            }
+
+            function getNodeIcon(node, isSelected) {
+                let color = (node.type === 'start' || node.type === 'end') ? '#D32F2F' : (isSelected ? '#4CAF50' : '#9E9E9E');
+                return L.divIcon({
+                    html: createIconHTML(node.shortName, color, isSelected),
+                    className: '',
+                    iconSize: [22, 44],
+                    iconAnchor: [11, 11],   // 圆点中心对准坐标
+                });
+            }
+
+            const markers = [];
+            let routeNodeSet = new Set();
+            let routeMarkers = [];
+            let polyline = null;
+            let numberMarkers = [];
+            window.drawMode = false;
+
+            nodes.forEach((node, idx) => {
+                const marker = L.marker([node.lat, node.lng], { icon: getNodeIcon(node, false) }).addTo(map);
+                marker.nodeData = node;
+                marker.nodeId = idx;
+                marker.on('click', function(e) {
+                    if (!window.drawMode) {
+                        showInfoPopup(marker);
+                    } else {
+                        if (routeNodeSet.has(idx)) {
+                            showToast('此节点已在路线中');
+                        } else {
+                            addToRoute(marker);
+                        }
+                    }
+                });
+                markers.push(marker);
+            });
+
+            function showInfoPopup(marker) {
+                const node = marker.nodeData;
+                document.getElementById('cardHeader').style.background = (node.type === 'start' || node.type === 'end') ? '#D32F2F' : '#4CAF50';
+                document.getElementById('cardName').textContent = '📍 ' + node.name;
+                document.getElementById('cardCoords').textContent = '🌐 ' + node.lat.toFixed(2) + '°N , ' + node.lng.toFixed(2) + '°E';
+                document.getElementById('cardInfo').innerHTML = node.info;
+                document.getElementById('cardAI').innerHTML = '🤖 <b>AI参考：</b>' + node.ai;
+                document.getElementById('infoCard').classList.add('show');
+            }
+
+            window.closeCard = function() {
+                document.getElementById('infoCard').classList.remove('show');
+            };
+
+            function showToast(msg) {
+                const toast = document.getElementById('toast');
+                toast.textContent = msg;
+                toast.classList.add('show');
+                clearTimeout(toast._timeout);
+                toast._timeout = setTimeout(() => toast.classList.remove('show'), 2000);
+            }
+
+            window.toggleDrawMode = function() {
+                window.drawMode = !window.drawMode;
+                const btn = document.getElementById('btnDraw');
+                if (window.drawMode) {
+                    btn.textContent = '⏹️ 结束绘制';
+                    btn.classList.add('active');
+                    document.getElementById('mapHint').textContent = '🖊️ 绘制模式：依次点击要经过的节点';
+                    document.getElementById('infoCard').classList.remove('show');
+                } else {
+                    btn.textContent = '🖊️ 开始绘制路线';
+                    btn.classList.remove('active');
+                    document.getElementById('mapHint').textContent = '👆 点击任意节点查看详细信息';
+                }
+            };
+
+            function addToRoute(marker) {
+                const node = marker.nodeData;
+                const idx = node.id;
+
+                if (node.type === 'start' && routeNodeSet.has(0)) {
+                    showToast('起点已在路线中');
+                    return;
+                }
+                if (node.type === 'end' && routeMarkers.length === 0) {
+                    showToast('请先添加起点和其他节点');
+                    return;
+                }
+
+                routeNodeSet.add(idx);
+                routeMarkers.push(marker);
+                marker.setIcon(getNodeIcon(node, true));
+
+                if (node.type === 'end') {
+                    window.drawMode = false;
+                    document.getElementById('btnDraw').textContent = '🖊️ 开始绘制路线';
+                    document.getElementById('btnDraw').classList.remove('active');
+                    document.getElementById('mapHint').textContent = '✅ 路线完成！点击AI评价查看结果';
+                    document.getElementById('btnAI').disabled = false;
+                    document.getElementById('btnAI').style.opacity = 1;
+                }
+
+                updateRouteDisplay();
+            }
+
+            function updateRouteDisplay() {
+                if (polyline) map.removeLayer(polyline);
+                numberMarkers.forEach(m => map.removeLayer(m));
+                numberMarkers = [];
+
+                const latlngs = routeMarkers.map(m => m.getLatLng());
+                if (latlngs.length > 1) {
+                    polyline = L.polyline(latlngs, {
+                        color: '#FF6D00',
+                        weight: 5,
+                        opacity: 0.9,
+                    }).addTo(map);
+
+                    for (let i = 0; i < latlngs.length - 1; i++) {
+                        const p1 = latlngs[i];
+                        const p2 = latlngs[i+1];
+                        const mid = L.latLng(
+                            (p1.lat + p2.lat) / 2,
+                            (p1.lng + p2.lng) / 2
+                        );
+                        const numIcon = L.divIcon({
+                            html: `<div class="route-num">${i+1}</div>`,
+                            className: '',
+                            iconSize: [20, 20],
+                            iconAnchor: [10, 10],
+                        });
+                        const numMarker = L.marker(mid, { icon: numIcon, interactive: false }).addTo(map);
+                        numberMarkers.push(numMarker);
+                    }
+                }
+
+                const infoDiv = document.getElementById('routeInfo');
+                if (routeMarkers.length <= 1) {
+                    infoDiv.innerHTML = '<div class="empty-hint">🟢 起点已就位：<b>晋宁区</b><br><br>请继续点击节点添加路线</div>';
+                    return;
+                }
+
+                let html = '';
+                for (let i = 0; i < routeMarkers.length - 1; i++) {
+                    const from = routeMarkers[i].getLatLng();
+                    const to = routeMarkers[i+1].getLatLng();
+                    const dist = getDistance(from.lat, from.lng, to.lat, to.lng);
+                    const bearing = getBearing(from.lat, from.lng, to.lat, to.lng);
+                    const dirStr = bearingToCardinal(bearing);
+                    html += `<div class="segment">
+                        <span class="seg-num">${i+1}.</span> ${routeMarkers[i].nodeData.shortName} → ${routeMarkers[i+1].nodeData.shortName}<br>
+                        <span class="dir">${dirStr}</span>，约 <b>${dist} 公里</b>
+                    </div>`;
+                }
+                let total = 0;
+                for (let i=0; i<routeMarkers.length-1; i++) {
+                    const f = routeMarkers[i].getLatLng();
+                    const t = routeMarkers[i+1].getLatLng();
+                    total += getDistance(f.lat, f.lng, t.lat, t.lng);
+                }
+                html += `<div style="margin-top:8px; padding-top:6px; border-top:2px solid #2d5a27; font-weight:bold; color:#2d5a27; font-size:0.85em;">📊 总里程：约${Math.round(total)}公里</div>`;
+                const hasYuanjiang = routeMarkers.some(m => m.nodeData.id === 3);
+                if (!hasYuanjiang && routeMarkers.length >= 2) {
+                    html += '<div style="color:#D32F2F; margin-top:4px; font-weight:bold;">⚠️ 未经过元江县，无法过江！</div>';
+                }
+                infoDiv.innerHTML = html;
+            }
+
+            window.resetRoute = function() {
+                markers.forEach(m => {
+                    m.setIcon(getNodeIcon(m.nodeData, false));
+                });
+                routeNodeSet.clear();
+                routeMarkers = [];
+                if (polyline) map.removeLayer(polyline);
+                numberMarkers.forEach(m => map.removeLayer(m));
+                numberMarkers = [];
+
+                document.getElementById('routeInfo').innerHTML = '<div class="empty-hint">🟢 起点已就位：<b>晋宁区</b><br><br>👆 请先点击地图上的节点<br>了解各地情况<br><br>讨论后点击下方按钮<br>开始规划路线</div>';
+                document.getElementById('aiReport').classList.remove('show');
+                document.getElementById('btnAI').disabled = true;
+                document.getElementById('btnAI').style.opacity = 0.4;
+
+                window.drawMode = false;
+                document.getElementById('btnDraw').textContent = '🖊️ 开始绘制路线';
+                document.getElementById('btnDraw').classList.remove('active');
+                document.getElementById('mapHint').textContent = '👆 点击任意节点查看详细信息';
+                document.getElementById('infoCard').classList.remove('show');
+
+                const start = markers[0];
+                routeNodeSet.add(0);
+                routeMarkers.push(start);
+                start.setIcon(getNodeIcon(start.nodeData, true));
+                updateRouteDisplay();
+            };
+
+            window.aiEvaluate = function() {
+                if (routeMarkers.length < 2) return;
+                const hasYuanjiang = routeMarkers.some(m => m.nodeData.id === 3);
+                const interferenceNodes = routeMarkers.filter(m => m.nodeData.type === 'interfere');
+                let total = 0;
+                for (let i=0; i<routeMarkers.length-1; i++) {
+                    const f = routeMarkers[i].getLatLng();
+                    const t = routeMarkers[i+1].getLatLng();
+                    total += getDistance(f.lat, f.lng, t.lat, t.lng);
+                }
+                let stars = 5;
+                let comments = [];
+                if (!hasYuanjiang) { stars -= 2; comments.push('未经过元江县，无法渡江！'); }
+                if (interferenceNodes.length > 0) {
+                    stars -= interferenceNodes.length;
+                    comments.push(`经过了${interferenceNodes.length}个高风险节点（${interferenceNodes.map(m=>m.nodeData.shortName).join('、')}），请尽量绕行。`);
+                }
+                const reportDiv = document.getElementById('aiReport');
+                reportDiv.classList.add('show');
+                reportDiv.innerHTML = `
+                    <div class="ai-title">🤖 AI路线评价报告</div>
+                    <span style="font-size:1.1em;">${'⭐'.repeat(Math.max(0,stars))}${'☆'.repeat(5-Math.max(0,stars))}</span> (${Math.max(0,stars)}/5)<br>
+                    <b>总里程：</b>约${Math.round(total)}公里 | <b>必经点：</b>${hasYuanjiang?'✅已包含':'❌缺失'}<br>
+                    ${comments.length>0 ? '<b>改进建议：</b><br>'+comments.join('<br>') : '✅ 路线规划合理，与专家方案高度一致！'}
+                `;
+            };
+
+            function toRad(deg) { return deg * Math.PI / 180; }
+            function getDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371;
+                const dLat = toRad(lat2-lat1);
+                const dLon = toRad(lon2-lon1);
+                const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+                return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)) * 10) / 10;
+            }
+            function getBearing(lat1, lon1, lat2, lon2) {
+                const φ1 = toRad(lat1), φ2 = toRad(lat2);
+                const Δλ = toRad(lon2-lon1);
+                const y = Math.sin(Δλ) * Math.cos(φ2);
+                const x = Math.cos(φ1)*Math.sin(φ2) - Math.sin(φ1)*Math.cos(φ2)*Math.cos(Δλ);
+                const θ = Math.atan2(y, x);
+                return (θ * 180 / Math.PI + 360) % 360;
+            }
+            function bearingToCardinal(bearing) {
+                const dirs = ['正北','东北偏北','东北','东北偏东','正东','东南偏东','东南','东南偏南','正南','西南偏南','西南','西南偏西','正西','西北偏西','西北','西北偏北'];
+                const idx = Math.round(bearing / 22.5) % 16;
+                return dirs[idx];
+            }
+
+            // 初始状态：起点默认加入
+            const startMarker = markers[0];
+            routeNodeSet.add(0);
+            routeMarkers.push(startMarker);
+            startMarker.setIcon(getNodeIcon(startMarker.nodeData, true));
+            updateRouteDisplay();
+        }
+    </script>
+</body>
+</html>
