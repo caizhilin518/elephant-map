@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🐘 大象北迁 · 经纬度探秘</title>
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <style>
+        :root {
+            --bg: #1a1a2e;
+            --accent: #ff6d00;
+            --gold: #ffd54f;
+            --green: #4CAF50;
+            --water: #2196F3;
+        }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg);
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .container {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #1b3a0a, #2d5a27);
+            color: #fff;
+            padding: 10px 16px;
+            flex-shrink: 0;
+            z-index: 1000;
+        }
+        .navbar .title {
+            font-size: 1em;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .navbar .sub {
+            font-size: 0.7em;
+            color: #a5d6a7;
+        }
+        .badge {
+            float: right;
+            background: var(--accent);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            margin-top: -20px;
+        }
+        .map-wrap {
+            flex: 1;
+            position: relative;
+            min-height: 0;
+        }
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        .map-hint {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            padding: 5px 14px;
+            border-radius: 14px;
+            font-size: 0.7em;
+            pointer-events: none;
+            z-index: 500;
+        }
+        .input-panel {
+            background: #1a3a1a;
+            padding: 10px 16px;
+            flex-shrink: 0;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 1000;
+        }
+        .input-panel label {
+            color: #ccc;
+            font-size: 0.75em;
+            white-space: nowrap;
+        }
+        .input-panel input {
+            flex: 1;
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 2px solid #3d7a35;
+            background: #243a24;
+            color: #fff;
+            font-size: 0.85em;
+            min-width: 0;
+        }
+        .input-panel input::placeholder {
+            color: #888;
+        }
+        .input-panel button {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85em;
+            font-weight: bold;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .input-panel button:active {
+            background: #e65100;
+            transform: scale(0.95);
+        }
+        .found-list {
+            background: #1a3a1a;
+            padding: 4px 16px 8px;
+            flex-shrink: 0;
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            font-size: 0.7em;
+            color: #aaa;
+        }
+        .found-tag {
+            background: #2a5a2a;
+            color: #fff;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+        }
+        .toast {
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            z-index: 2000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+        .toast.error {
+            background: rgba(180, 30, 30, 0.9);
+        }
+        .toast.success {
+            background: rgba(30, 140, 60, 0.9);
+        }
+        .info-card {
+            position: absolute;
+            bottom: 15px;
+            left: 10px;
+            right: 10px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+            z-index: 800;
+            display: none;
+            overflow: hidden;
+            max-height: 62vh;
+            animation: slideUp 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+        }
+        @keyframes slideUp {
+            from {
+                transform: translateY(40px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        .info-card.show {
+            display: block;
+        }
+        .card-header {
+            padding: 18px 20px 16px;
+            color: #fff;
+            position: relative;
+            text-align: center;
+        }
+        .card-header .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            font-size: 1.2em;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            z-index: 10;
+        }
+        .card-header .location-icon {
+            font-size: 1.4em;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .card-header .location-name {
+            font-size: 1.35em;
+            font-weight: 900;
+            letter-spacing: 1px;
+            line-height: 1.3;
+            margin-bottom: 4px;
+        }
+        .card-header .location-coords {
+            font-size: 0.78em;
+            opacity: 0.9;
+            letter-spacing: 0.5px;
+        }
+        .card-header .location-time {
+            font-size: 0.7em;
+            opacity: 0.75;
+            margin-top: 2px;
+        }
+        .card-body {
+            padding: 14px 18px 6px;
+            color: #333;
+            font-size: 0.85em;
+            line-height: 1.7;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .card-body .report-title {
+            text-align: center;
+            font-size: 1em;
+            font-weight: 700;
+            color: #1a1a2e;
+            margin-bottom: 10px;
+            line-height: 1.5;
+            padding-bottom: 8px;
+            border-bottom: 2px dashed #e0e0e0;
+        }
+        .card-body .report-summary {
+            color: #444;
+            font-size: 0.88em;
+            line-height: 1.75;
+            margin-bottom: 6px;
+        }
+        .card-body .source {
+            display: block;
+            margin-top: 6px;
+            font-size: 0.72em;
+            color: #999;
+            font-style: italic;
+            text-align: right;
+        }
+        .card-footer {
+            padding: 10px 18px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .btn-link {
+            display: block;
+            background: #ff6d00;
+            color: #fff;
+            padding: 11px 16px;
+            border-radius: 22px;
+            font-size: 0.85em;
+            font-weight: bold;
+            text-align: center;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px rgba(255, 109, 0, 0.3);
+        }
+        .btn-link:active {
+            background: #cc5200;
+            transform: scale(0.96);
+        }
+        .card-coords {
+            font-size: 0.62em;
+            color: #bbb;
+            text-align: center;
+            margin-top: 2px;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .overlay.show {
+            display: flex;
+        }
+        .overlay-card {
+            background: #fff;
+            border-radius: 20px;
+            padding: 28px 22px;
+            text-align: center;
+            max-width: 400px;
+            width: 88vw;
+            box-shadow: 0 20px 56px rgba(0, 0, 0, 0.55);
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn {
+            from {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+        .overlay-card .icon {
+            font-size: 3.5em;
+        }
+        .overlay-card h3 {
+            margin: 10px 0 6px;
+            font-size: 1.3em;
+            color: #1a1a2e;
+        }
+        .overlay-card p {
+            font-size: 0.82em;
+            color: #666;
+            line-height: 1.7;
+            margin-bottom: 16px;
+        }
+        .overlay-card .btn-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .overlay-card button,
+        .overlay-card .btn-knowledge {
+            background: #ff6d00;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 22px;
+            font-size: 0.95em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(255, 109, 0, 0.35);
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-knowledge {
+            background: #2d5a27 !important;
+            box-shadow: 0 4px 16px rgba(45, 90, 39, 0.4) !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="navbar">
+            <div class="title">🐘 大象北迁 · 经纬度探秘</div>
+            <div class="sub">输入经纬度，定位大象北迁的6个关键地点</div>
+            <span class="badge" id="badge">已找到 0/6</span>
+        </div>
+
+        <div class="map-wrap">
+            <div id="map"></div>
+            <div class="map-hint" id="mapHint">🔍 在下方输入经纬度，寻找大象足迹</div>
+            <div class="info-card" id="infoCard">
+                <div class="card-header" id="cardHeader">
+                    <span class="close-btn" onclick="closeCard()" title="关闭">✕</span>
+                    <span class="location-icon" id="cardIcon"></span>
+                    <div class="location-name" id="cardLocationName"></div>
+                    <div class="location-coords" id="cardCoordsInline"></div>
+                    <div class="location-time" id="cardTime"></div>
+                </div>
+                <div class="card-body" id="cardBody">
+                    <div class="report-title" id="cardReportTitle"></div>
+                    <div class="report-summary" id="cardReportSummary"></div>
+                    <span class="source" id="cardSource"></span>
+                </div>
+                <div class="card-footer">
+                    <a class="btn-link" id="cardLink" href="#" target="_blank" rel="noopener">📰 查看完整事件百科</a>
+                    <div class="card-coords" id="cardCoords"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="input-panel">
+            <label>纬度°N</label>
+            <input type="text" id="latInput" placeholder="例：24.68" inputmode="decimal">
+            <label>经度°E</label>
+            <input type="text" id="lngInput" placeholder="例：102.60" inputmode="decimal">
+            <button onclick="searchLocation()">🔍 定位</button>
+        </div>
+
+        <div class="found-list" id="foundList">
+            <span style="color:#888;">已定位：</span>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="overlay" id="overlay">
+        <div class="overlay-card">
+            <div class="icon">🏁</div>
+            <h3>全部定位完成！</h3>
+            <p id="overlayMsg">
+                你成功找到了大象北迁的所有关键地点！<br><br>
+                从西双版纳到昆明，历时15个月，跨越500公里。
+            </p>
+            <div class="btn-group">
+                <button onclick="document.getElementById('overlay').classList.remove('show')">👆 我知道了</button>
+                <a class="btn-knowledge" href="https://baike.baidu.com/reference/57143891/533aYdO6cr3_z3kATPSDya31OiuXMtit7LDbV7FzzqIPmGapB4P1FJ836c828Ll2BUXIv5Utc5k7k8GOewwd6bJCDL5nI-BCw3b9AWCV" target="_blank" rel="noopener">
+                    🐘 查看大象习性知识
+                </a>
+            </div>
+            <p style="font-size:0.65em; color:#999; margin-top:12px;">
+                了解大象的行走速度、食物偏好和生活习性，<br>为后续规划路线做准备。
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        if (typeof L === 'undefined') {
+            document.body.innerHTML = '<div style="color:#fff;text-align:center;padding-top:40vh;">地图加载失败，请检查网络后刷新</div>';
+        } else {
+            initApp();
+        }
+
+        function initApp() {
+            const map = L.map('map', {
+                center: [23.5, 101.8],
+                zoom: 8,
+                zoomControl: true,
+                attributionControl: false,
+            });
+
+            L.tileLayer(
+                'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+                    subdomains: ['1', '2', '3', '4'],
+                    maxZoom: 18,
+                    minZoom: 5,
+                }).addTo(map);
+
+            const points = [
+                {
+                    id: 1,
+                    lat: 22.20,
+                    lng: 100.90,
+                    name: '西双版纳勐养保护区',
+                    time: '2020年3月',
+                    icon: '🐘',
+                    color: '#4CAF50',
+                    headerColor: '#2E7D32',
+                    title: '16头亚洲象离开家园',
+                    summary: '2020年3月，16头野生亚洲象从西双版纳勐养保护区出发。大象是群居动物，由经验丰富的雌象带领，每天需进食约150公斤植物，活动范围可达数十平方公里。当栖息地食物和水源不足时，它们会本能地向外迁移，寻找新的觅食地。这次北迁很可能与保护区周边橡胶林扩张导致的食物减少有关。',
+                    source: '综合新华社、央视报道',
+                    newsUrl: 'https://www.thepaper.cn/newsDetail_forward_12892493',
+                    newsTitle: '澎湃新闻：云南北迁象群离开西双版纳',
+                },
+                {
+                    id: 2,
+                    lat: 22.78,
+                    lng: 100.98,
+                    name: '普洱市思茅区倚象镇',
+                    time: '2020年12月',
+                    icon: '👶',
+                    color: '#FF9800',
+                    headerColor: '#E65100',
+                    title: '北迁途中迎来新生命',
+                    summary: '象群在普洱市思茅区停留期间，一头母象产下幼象。亚洲象孕期长达22个月，幼象出生后高度依赖母亲和象群保护，前两年几乎寸步不离。象群会为了照顾幼崽主动放慢行进速度，每天的移动距离可能从20公里降至不足10公里。新成员的加入也让象群更倾向于选择安全、食物丰富的区域停留。',
+                    source: '综合央视新闻、人民日报报道',
+                    newsUrl: 'https://m.news.cctv.com/2021/06/22/ARTIOHXVLggGT7H9P57QcDjk210622.shtml',
+                    newsTitle: '央视新闻：北迁象群在普洱诞下幼象',
+                },
+                {
+                    id: 3,
+                    lat: 23.60,
+                    lng: 101.98,
+                    name: '玉溪市元江县',
+                    time: '2021年4月',
+                    icon: '🌊',
+                    color: '#2196F3',
+                    headerColor: '#0D47A1',
+                    title: '枯水期涉水跨过元江',
+                    summary: '象群抵达元江时正值枯水期，它们从浅滩涉水过江。大象其实是天生的游泳健将，能用长鼻子呼吸，完全可以在深水中游几公里。但它们通常更偏爱浅水区域，便于幼象安全通过。水源是影响大象迁徙路线的关键因素——它们每天需要饮用80-200升水，还会用泥浴来防晒和驱虫，因此路线总会贴近河流或水塘。',
+                    source: '综合新华社、光明网报道',
+                    newsUrl: 'https://m.thepaper.cn/newsDetail_forward_13939863',
+                    newsTitle: '澎湃新闻：象群涉水跨过元江',
+                },
+                {
+                    id: 4,
+                    lat: 23.71,
+                    lng: 102.48,
+                    name: '红河州石屏县宝秀镇',
+                    time: '2021年5月上旬',
+                    icon: '🌾',
+                    color: '#FF5722',
+                    headerColor: '#BF360C',
+                    title: '农田取食，小象获救',
+                    summary: '象群在石屏县大量取食玉米、甘蔗等农作物，一头小象不慎掉入水沟后被救起。大象的食性很广，但尤其偏爱富含糖分和淀粉的农作物，这些高能量食物对它们极具吸引力。一头成年象一天能吃掉200公斤甘蔗，因此农田密集区常常成为人象冲突的高发地。规划迁徙廊道时，必须考虑用缓冲带或食物补偿机制来减少对农作物的破坏。',
+                    source: '综合人民日报、中国新闻网报道',
+                    newsUrl: 'https://m.news.cctv.com/2021/07/17/ARTI3OxgbyIRMCkF42RtDl0b210717.shtml',
+                    newsTitle: '央视新闻：石屏县小象获救记',
+                },
+                {
+                    id: 5,
+                    lat: 24.18,
+                    lng: 102.41,
+                    name: '玉溪市峨山县县城',
+                    time: '2021年5月27日',
+                    icon: '🏙️',
+                    color: '#9C27B0',
+                    headerColor: '#4A148C',
+                    title: '大象逛大街！全球关注',
+                    summary: '象群走进峨山县城，推开商铺卷帘门，喝掉玉米水。大象拥有极强的记忆力和好奇心，能记住数年前的水源和食物位置。它们对发酵的玉米酒味特别敏感，这也是它们闯入民居的重要原因。城市环境虽然能提供临时食物，但硬质路面会损伤象蹄，噪音和灯光也容易造成应激。因此，引导象群避开城镇、规划远离人类密集区的生态廊道至关重要。',
+                    source: '综合环球时报、澎湃新闻报道',
+                    newsUrl: 'https://www.chinanews.com/sh/2021/06-19/9502771.shtml',
+                    newsTitle: '中国新闻网：大象逛峨山县城',
+                },
+                {
+                    id: 6,
+                    lat: 24.68,
+                    lng: 102.60,
+                    name: '昆明市晋宁区双河乡',
+                    time: '2021年6月2日',
+                    icon: '🏁',
+                    color: '#f44336',
+                    headerColor: '#B71C1C',
+                    title: '历史性一刻！到达昆明',
+                    summary: '象群抵达昆明市晋宁区，距离市中心仅50公里，这是此次北迁的最远点。大象的迁徙范围受限于栖息地连通性，连续的森林和河谷是它们移动的天然通道。当城市扩张切断这些通道时，大象就会迷失方向或误入城区。最终象群在人工引导下折返南归，说明在规划大象保护路线时，必须预留足够宽的生态廊道，并辅以食物引诱和围堵相结合的科学干预方式。',
+                    source: '综合新华社、人民网报道',
+                    newsUrl: 'https://m.thepaper.cn/newsDetail_forward_12901612',
+                    newsTitle: '澎湃新闻：象群抵达昆明晋宁',
+                }
+            ];
+
+            const MATCH_THRESHOLD = 0.5;
+            let foundSet = new Set();
+            let markers = [];
+            const routeLine = L.polyline([], {
+                color: '#ff6d00',
+                weight: 3,
+                dashArray: '6 4',
+                opacity: 0.8,
+            }).addTo(map);
+
+            function showToast(msg, type) {
+                const toast = document.getElementById('toast');
+                toast.textContent = msg;
+                toast.className = 'toast ' + (type || '');
+                toast.classList.add('show');
+                clearTimeout(toast._timeout);
+                toast._timeout = setTimeout(() => toast.classList.remove('show'), 2500);
+            }
+
+            function showCard(index) {
+                const p = points[index];
+                document.getElementById('cardHeader').style.background = p.headerColor;
+                document.getElementById('cardIcon').textContent = p.icon;
+                document.getElementById('cardLocationName').textContent = '📍 ' + p.name;
+                document.getElementById('cardCoordsInline').textContent =
+                    '🌐 ' + p.lat.toFixed(2) + '°N  ,  ' + p.lng.toFixed(2) + '°E';
+                document.getElementById('cardTime').textContent = '⏰ ' + p.time;
+                document.getElementById('cardReportTitle').textContent = '📋 ' + p.title;
+                document.getElementById('cardReportSummary').textContent = p.summary;
+                document.getElementById('cardSource').textContent = '——来源：' + p.source;
+                document.getElementById('cardLink').href = p.newsUrl;
+                document.getElementById('cardLink').textContent = '📰 查看完整报道：' + p.newsTitle;
+                document.getElementById('cardCoords').textContent =
+                    '📍 精确坐标：' + p.lat.toFixed(4) + '°N, ' + p.lng.toFixed(4) + '°E';
+                document.getElementById('infoCard').classList.add('show');
+            }
+
+            window.closeCard = function() {
+                document.getElementById('infoCard').classList.remove('show');
+            };
+
+            function addMarker(index) {
+                const p = points[index];
+                const iconHtml = `
+                <div style="
+                  width: 38px; height: 38px;
+                  background: ${p.color};
+                  border-radius: 50%;
+                  display: flex; align-items: center; justify-content: center;
+                  font-size: 19px;
+                  border: 3px solid #fff;
+                  box-shadow: 0 4px 12px rgba(0,0,0,0.55);
+                  cursor: pointer;
+                ">${p.icon}</div>
+              `;
+                const icon = L.divIcon({
+                    html: iconHtml,
+                    className: '',
+                    iconSize: [38, 38],
+                    iconAnchor: [19, 19],
+                });
+                const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
+                marker.on('click', () => showCard(index));
+                markers.push({ index, marker });
+                map.flyTo([p.lat, p.lng], 13, { duration: 1.2 });
+                setTimeout(() => showCard(index), 1300);
+            }
+
+            function updateRoute() {
+                const sorted = [...foundSet].sort((a, b) => a - b);
+                if (sorted.length >= 2) {
+                    routeLine.setLatLngs(sorted.map(i => [points[i].lat, points[i].lng]));
+                }
+            }
+
+            function updateBadge() {
+                const badge = document.getElementById('badge');
+                const count = foundSet.size;
+                badge.textContent = '已找到 ' + count + '/6';
+                if (count === 6) {
+                    badge.style.background = '#4CAF50';
+                    badge.textContent = '✅ 全部完成';
+                }
+            }
+
+            function updateFoundList() {
+                const container = document.getElementById('foundList');
+                let html = '<span style="color:#888;">已定位：</span>';
+                points.forEach((p, i) => {
+                    if (foundSet.has(i)) {
+                        const shortName = p.name.split('县')[0] || p.name.split('市')[0] || p.name.slice(0, 4);
+                        html += `<span class="found-tag">${p.icon} ${shortName}</span>`;
+                    }
+                });
+                if (foundSet.size === 0) html += '<span style="color:#666;">暂无，请输入坐标探索</span>';
+                container.innerHTML = html;
+            }
+
+            function checkCompletion() {
+                if (foundSet.size === 6) {
+                    setTimeout(() => document.getElementById('overlay').classList.add('show'), 600);
+                }
+            }
+
+            window.searchLocation = function() {
+                const latStr = document.getElementById('latInput').value.trim();
+                const lngStr = document.getElementById('lngInput').value.trim();
+                if (!latStr || !lngStr) return showToast('请输入纬度和经度', 'error');
+                const lat = parseFloat(latStr);
+                const lng = parseFloat(lngStr);
+                if (isNaN(lat) || isNaN(lng)) return showToast('经纬度格式不正确', 'error');
+                if (lat < 21 || lat > 25 || lng < 100 || lng > 103) return showToast('坐标超出云南范围（21-25°N, 100-103°E）', 'error');
+
+                let bestIdx = -1;
+                let bestDist = Infinity;
+                points.forEach((p, i) => {
+                    if (foundSet.has(i)) return;
+                    const dist = Math.hypot(p.lat - lat, p.lng - lng);
+                    if (dist < bestDist) { bestDist = dist;
+                        bestIdx = i; }
+                });
+
+                if (bestIdx >= 0 && bestDist <= MATCH_THRESHOLD) {
+                    foundSet.add(bestIdx);
+                    addMarker(bestIdx);
+                    updateRoute();
+                    updateBadge();
+                    updateFoundList();
+                    showToast('✅ 找到了！' + points[bestIdx].name, 'success');
+                    checkCompletion();
+                } else {
+                    showToast('❌ 该坐标附近没有关键停留点，请再试试', 'error');
+                    const tempIcon = L.divIcon({
+                        html: '<div style="width:14px;height:14px;background:#ff4444;border-radius:50%;border:2px solid #fff;"></div>',
+                        className: '',
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7],
+                    });
+                    const tempMarker = L.marker([lat, lng], { icon: tempIcon }).addTo(map);
+                    map.flyTo([lat, lng], 11, { duration: 0.8 });
+                    setTimeout(() => map.removeLayer(tempMarker), 2000);
+                }
+                document.getElementById('latInput').value = '';
+                document.getElementById('lngInput').value = '';
+                document.getElementById('latInput').focus();
+            };
+
+            document.getElementById('lngInput').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') searchLocation();
+            });
+            document.getElementById('latInput').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') document.getElementById('lngInput').focus();
+            });
+
+            updateBadge();
+            updateFoundList();
+            map.setView([23.5, 101.8], 8);
+            console.log('🐘 所有链接已按您提供的顺序更换，前六个为地点报道，第七个为习性知识链接。');
+        }
+    </script>
+</body>
+</html>
