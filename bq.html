@@ -84,6 +84,19 @@
             pointer-events: none;
             z-index: 500;
         }
+        .map-attribution {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            pointer-events: none;
+            z-index: 600;
+            white-space: nowrap;
+        }
         .input-panel {
             background: #1a3a1a;
             padding: 10px 16px;
@@ -387,6 +400,7 @@
         <div class="map-wrap">
             <div id="map"></div>
             <div class="map-hint" id="mapHint">🔍 在下方输入经纬度，寻找大象足迹</div>
+            <div class="map-attribution">地图数据来源于高德地图</div>
             <div class="info-card" id="infoCard">
                 <div class="card-header" id="cardHeader">
                     <span class="close-btn" onclick="closeCard()" title="关闭">✕</span>
