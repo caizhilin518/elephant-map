@@ -24,6 +24,11 @@
             background:rgba(0,0,0,0.75); color:#fff; padding:5px 14px; border-radius:14px;
             font-size:0.7em; pointer-events:none; z-index:500; white-space:nowrap;
         }
+        .map-attribution {
+            position:absolute; top:8px; right:8px;
+            background:rgba(0,0,0,0.6); color:#fff; padding:4px 10px; border-radius:10px;
+            font-size:0.7em; pointer-events:none; z-index:600; white-space:nowrap;
+        }
         .side-panel {
             flex:2; background:#2d5a27; display:flex; flex-direction:column;
             padding:12px 10px; overflow-y:auto; border-left:2px solid #1b3a0a;
@@ -107,6 +112,7 @@
         <div class="map-panel">
             <div id="map"></div>
             <div class="map-hint" id="mapHint">👆 点击任意节点查看详细信息</div>
+            <div class="map-attribution">地图数据来源于高德地图</div>
             <div class="info-card" id="infoCard">
                 <div class="card-header" id="cardHeader">
                     <span class="close-btn" onclick="closeCard()">✕</span>
